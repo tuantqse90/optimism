@@ -499,7 +499,9 @@ mod tests {
     };
     use alloy_primitives::{Bytes, LogData, hex};
     use alloy_rlp::Encodable;
-    use kona_interop::{DependencySet, InteropProvider, RawMessagePayload, SuperRoot};
+    use kona_interop::{
+        DependencySet, InitiatingLogs, InteropProvider, RawMessagePayload, SuperRoot,
+    };
     use kona_proof_interop::{BootInfo, LogCommitmentSource, OracleInteropProvider, PreState};
     use op_alloy_consensus::{OpDepositReceipt, OpDepositReceiptWithBloom};
     use rand::Rng;
@@ -616,10 +618,14 @@ mod tests {
             l1_config: Default::default(),
         };
         let provider = OracleInteropProvider::new(oracle, boot, Default::default());
-        kona_proof::block_on(provider.receipts_by_hash(CHAIN_ID, block_hash))
-            .unwrap()
-            .into_iter()
-            .flat_map(|receipt| receipt.into_logs())
+        let InitiatingLogs::Receipts(logs) = kona_proof::block_on(async {
+            let header = provider.header_by_hash(CHAIN_ID, block_hash).await?;
+            provider.initiating_logs(CHAIN_ID, &header).await
+        })
+        .unwrap() else {
+            panic!("a provider without a log commitment source serves receipts");
+        };
+        logs.into_iter()
             .map(|log| {
                 let payload_hash = keccak256(RawMessagePayload::from(&log).as_ref());
                 keccak256([log.address.as_slice(), payload_hash.as_slice()].concat())
@@ -1163,15 +1169,14 @@ mod tests {
                 provider = provider.with_log_commitments(Arc::new(commitments));
             }
             kona_proof::block_on(async {
+                let blocks = provider.blocks_with_receipts(&heads).await.unwrap();
                 MessageGraph::derive(
-                    &heads,
+                    &blocks,
                     &provider,
                     &configs,
                     &dependency_set,
                     MESSAGE_EXPIRY_WINDOW,
                 )
-                .await
-                .unwrap()
                 .resolve()
                 .await
                 .is_ok()
