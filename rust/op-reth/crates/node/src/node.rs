@@ -3,6 +3,7 @@
 use crate::{
     OpEngineApiBuilder, OpEngineTypes,
     args::RollupArgs,
+    derived_payload_service::DerivedPayloadServiceBuilder,
     engine::OpEngineValidator,
     payload_service::OpPayloadServiceBuilder,
     txpool::{OpCustomTransactionPool, OpTransactionValidator},
@@ -234,15 +235,17 @@ pub struct OpNode {
 }
 
 /// The component builder used by the stock node configuration.
-pub type OpNodeComponentBuilder<Node, PayloadServiceBuilder = OpPayloadServiceBuilder> =
-    ComponentsBuilder<
-        Node,
-        OpPoolBuilder,
-        PayloadServiceBuilder,
-        OpNetworkBuilder,
-        OpExecutorBuilder,
-        OpConsensusBuilder,
-    >;
+pub type OpNodeComponentBuilder<
+    Node,
+    PayloadServiceBuilder = DerivedPayloadServiceBuilder<OpPayloadServiceBuilder>,
+> = ComponentsBuilder<
+    Node,
+    OpPoolBuilder,
+    PayloadServiceBuilder,
+    OpNetworkBuilder,
+    OpExecutorBuilder,
+    OpConsensusBuilder,
+>;
 
 impl Default for OpNode {
     fn default() -> Self {
@@ -331,10 +334,10 @@ impl OpNode {
             .node_types::<Node>()
             .executor(OpExecutorBuilder::default())
             .pool(self.standard_pool_builder())
-            .payload(OpPayloadServiceBuilder::new(
+            .payload(DerivedPayloadServiceBuilder::new(OpPayloadServiceBuilder::new(
                 self.payload_builder(),
                 self.args.testing_sdm_fixed_policy,
-            ))
+            )))
             .network(OpNetworkBuilder::new(disable_txpool_gossip, !discovery_v4))
             .consensus(OpConsensusBuilder::default())
     }
